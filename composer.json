@@ -1,0 +1,13 @@
+{
+  "name": "larikmc/yii2-auth",
+  "description": "Common authentication module for Yii2 advanced backend",
+  "type": "yii2-extension",
+  "autoload": {
+    "psr-4": {
+      "larikmc\\auth\\": "src/"
+    }
+  },
+  "require": {
+    "yiisoft/yii2": "~2.0"
+  }
+}
