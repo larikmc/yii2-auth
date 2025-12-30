@@ -11,6 +11,7 @@ use larikmc\auth\Module;
 class AuthController extends Controller
 {
     public $layout = '@larikmc/auth/views/layouts/auth';
+    public $remaining;
 
     /**
      * CAPTCHA action
@@ -28,8 +29,8 @@ class AuthController extends Controller
     /**
      * Login action with brute-force protection
      */
-    public function actionLogin()
-    {
+    public function actionLogin($username = null){
+
         if (!Yii::$app->user->isGuest) {
             return $this->goHome();
         }
@@ -37,83 +38,45 @@ class AuthController extends Controller
         /** @var Module $module */
         $module = $this->module;
 
-        $model = new LoginForm();
-
+        $model   = new LoginForm();
         $request = Yii::$app->request;
         $cache   = Yii::$app->cache;
 
-        $ip        = $request->userIP;
-        $userAgent = substr((string)$request->userAgent, 0, 120);
+        $ip      = $request->userIP;
+        $userKey = 'login_attempts_' . md5($ip);
+        $lockKey = 'login_lock_' . md5($ip);
 
+        $userAttempts = (int) ($cache->get($userKey) ?? 0);
+        $lockTime = $cache->get($lockKey);
         $remaining = 0;
 
+//        $cache->delete($userKey);
+//        $cache->delete($lockKey);
+
         /* ============================================================
-         * 🕵️ Honeytoken — ловушка для ботов
-         * ============================================================ */
+       * 🕵️ Honeytoken — ловушка для ботов
+       * ============================================================ */
         if (!empty($request->post('login_check'))) {
             Yii::warning("Auth bot detected from IP {$ip}", __METHOD__);
 
+            $lockTime = time() + $module->lockDuration;
+
             $cache->set(
-                'login_ip_attempts_' . md5($ip),
-                $module->ipMaxAttempts + 100,
-                $module->ipAttemptsTtl
+                $lockKey,
+                $lockTime,
+                $module->lockDuration
             );
 
-            Yii::$app->session->setFlash(
-                'error',
-                'Подозрительная активность. Попробуйте позже.'
-            );
-
-            return $this->render('login', compact('model', 'remaining'));
+            return $this->redirect('login');
         }
 
-        /* ============================================================
-         * 🌐 Глобальная блокировка IP + UA
-         * ============================================================ */
-        $ipKey = 'login_ip_attempts_' . md5($ip . '_' . $userAgent);
-        $ipAttempts = (int)($cache->get($ipKey) ?? 0);
-
-        if ($ipAttempts >= $module->ipMaxAttempts) {
-            Yii::warning("IP blocked {$ip} ({$ipAttempts})", __METHOD__);
-
-            Yii::$app->session->setFlash(
-                'warning',
-                'Мы временно ограничили попытки входа с вашего IP.'
-            );
-
-            return $this->render('login', compact('model', 'remaining'));
-        }
 
         /* ============================================================
-         * ⏱ Проверка блокировки при GET (таймер)
-         * ============================================================ */
-        if ($request->isGet) {
-            $username = Yii::$app->session->get('lastUsername') ?? 'guest';
-            $lockKey  = 'login_lock_' . md5($ip . '_' . $username);
-            $lockTime = $cache->get($lockKey);
-
-            if ($lockTime !== false) {
-                $remaining = max(0, $lockTime - time());
-            }
-        }
-
-        /* ============================================================
-         * 🔑 Обработка POST
-         * ============================================================ */
+        * 🔑 Обработка POST
+        * ============================================================ */
         if ($model->load($request->post())) {
-            $username = $model->username ?: 'guest';
-            Yii::$app->session->set('lastUsername', $username);
-
-            $userKey = 'login_attempts_' . md5($ip . '_' . $username . '_' . $userAgent);
-            $lockKey = 'login_lock_' . md5($ip . '_' . $username);
-
-            $userAttempts = (int)($cache->get($userKey) ?? 0);
-            $lockTime     = $cache->get($lockKey);
-
-            /* 🔒 Уже заблокирован */
-            if ($lockTime !== false) {
-                $remaining = max(0, $lockTime - time());
-                return $this->render('login', compact('model', 'remaining'));
+            if ($model->login()) {
+                return $this->goBack();
             }
 
             /* 🧮 Экспоненциальная задержка */
@@ -122,66 +85,68 @@ class AuthController extends Controller
                 sleep($delay);
             }
 
-            /* ✅ Успешный вход */
             if ($model->login()) {
                 $cache->delete($userKey);
-                $cache->delete($ipKey);
                 $cache->delete($lockKey);
-
-                Yii::$app->session->remove('lastUsername');
-                Yii::$app->session->setFlash('success', 'Добро пожаловать!');
-
                 return $this->goBack();
             }
 
-            /* ❌ Ошибка входа */
+            /* сохраняем количество попыток */
             $userAttempts++;
-            $ipAttempts++;
-
             $cache->set($userKey, $userAttempts, $module->userAttemptsTtl);
-            $cache->set($ipKey, $ipAttempts, $module->ipAttemptsTtl);
-
-            Yii::warning(
-                "Failed login #{$userAttempts} for {$username} ({$ip})",
-                __METHOD__
-            );
 
             $remainingAttempts = max(
                 $module->maxUserAttempts - $userAttempts,
                 0
             );
 
-            /* 🤖 CAPTCHA */
-            if ($userAttempts >= $module->captchaAfterAttempts) {
-                $model->scenario = 'withCaptcha';
-            }
-
             /* 🔒 Блокировка пользователя */
             if ($remainingAttempts <= 0) {
                 $lockTime = time() + $module->lockDuration;
-                $cache->set($lockKey, $lockTime, $module->lockDuration);
 
-                $remaining = $lockTime - time();
-
-                Yii::warning(
-                    "User {$username} locked for {$module->lockDuration}s ({$ip})",
-                    __METHOD__
+                $cache->set(
+                    $lockKey,
+                    $lockTime,
+                    $module->lockDuration
                 );
-
-                return $this->render('login', compact('model', 'remaining'));
             }
 
+            return $this->redirect(['login', 'username' => $model->username]);
+        }
+
+        /* ============================================================
+       * 🔑 Обработка GET
+       * ============================================================ */
+        $model->password = '';
+        if($username){
+            $model->username = $username;
+        }
+
+        if ($lockTime !== false) {
+            $remaining = max(0, $lockTime - time());
+            return $this->render('login', compact('model', 'remaining'));
+        }
+
+        if($userAttempts > 0){
+            /* ❌ Ошибка входа */
+            $remainingAttempts = max(
+                $module->maxUserAttempts - $userAttempts,
+                0
+            );
             Yii::$app->session->setFlash(
                 'error',
-                "Неверный логин или пароль. Осталось попыток: {$remainingAttempts}."
+                "Неверный логин или пароль. Осталось попыток: {$remainingAttempts}"
             );
         }
 
-        $model->password = '';
+        /* 🤖 CAPTCHA */
+        if ($userAttempts >= $module->captchaAfterAttempts) {
+            $model->scenario = 'withCaptcha';
+        }
 
         return $this->render('login', [
             'model'     => $model,
-            'remaining' => (int)$remaining,
+            'remaining' => (int) $remaining,
         ]);
     }
 

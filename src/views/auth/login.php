@@ -90,9 +90,7 @@ const alertBox = document.getElementById('lock-timer');
 
 function updateTimer() {
     if (seconds <= 0) {
-        alertBox.classList.remove('alert-warning');
-        alertBox.classList.add('alert-success');
-        alertBox.textContent = 'Вы можете попробовать войти снова. Обновите страницу.';
+        location.reload();
         return;
     }
 

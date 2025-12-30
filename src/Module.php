@@ -28,14 +28,8 @@ class Module extends BaseModule
     /** Время блокировки пользователя (сек) */
     public int $lockDuration = 900; // 15 минут
 
-    /** Максимальное количество попыток с одного IP + UA */
-    public int $ipMaxAttempts = 20;
-
     /** TTL счётчика попыток пользователя (сек) */
     public int $userAttemptsTtl = 900; // 15 минут
-
-    /** TTL счётчика попыток IP (сек) */
-    public int $ipAttemptsTtl = 1800; // 30 минут
 
     /** Максимальная задержка при брутфорсе (сек) */
     public int $maxDelaySeconds = 10;
