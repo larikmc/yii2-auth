@@ -83,6 +83,17 @@ composer require larikmc/yii2-auth:^1.0
 
 ---
 
+## в common/models/User добавить
+
+```php
+    public static function findByEmail($email)
+    {
+        return static::findOne(['email' => $email, 'status' => self::STATUS_ACTIVE]);
+    }
+```
+
+---
+
 ## 🌍 URL
 
 | Действие | URL |

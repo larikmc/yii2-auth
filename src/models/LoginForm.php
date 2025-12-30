@@ -7,7 +7,7 @@ use yii\web\IdentityInterface;
 
 class LoginForm extends Model
 {
-    public $username;
+    public $email;
     public $password;
     public $rememberMe = true;
     public $verifyCode;
@@ -17,7 +17,8 @@ class LoginForm extends Model
     public function rules()
     {
         return [
-            [['username', 'password'], 'required'],
+            [['email', 'password'], 'required'],
+            ['email', 'email'],
             ['rememberMe', 'boolean'],
             ['password', 'validatePassword'],
             ['verifyCode', 'captcha', 'on' => 'withCaptcha'],
@@ -52,14 +53,14 @@ class LoginForm extends Model
             return $this->_user;
         }
         $userClass = Yii::$app->getModule('auth')->userClass;
-        $this->_user = $userClass::findByUsername($this->username);
+        $this->_user = $userClass::findByEmail($this->email);
         return $this->_user;
     }
 
     public function attributeLabels(): array
 {
     return [
-        'username'   => 'Логин',
+        'email'   => 'Email',
         'password'   => 'Пароль',
         'rememberMe' => 'Запомнить меня',
         'verifyCode' => 'Проверочный код',

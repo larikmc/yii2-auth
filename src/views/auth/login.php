@@ -33,7 +33,7 @@ $blocked = !empty($remaining) && $remaining > 0;
 
         <?php $form = ActiveForm::begin(['id' => 'login-form']); ?>
 
-        <?= $form->field($model, 'username')
+        <?= $form->field($model, 'email')
                 ->textInput([
                         'class' => 'form-control form-control-lg',
                         'autofocus' => true,

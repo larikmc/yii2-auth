@@ -29,7 +29,7 @@ class AuthController extends Controller
     /**
      * Login action with brute-force protection
      */
-    public function actionLogin($username = null){
+    public function actionLogin($email = null){
 
         if (!Yii::$app->user->isGuest) {
             return $this->goHome();
@@ -111,15 +111,15 @@ class AuthController extends Controller
                 );
             }
 
-            return $this->redirect(['login', 'username' => $model->username]);
+            return $this->redirect(['login', 'email' => $model->email]);
         }
 
         /* ============================================================
        * 🔑 Обработка GET
        * ============================================================ */
         $model->password = '';
-        if($username){
-            $model->username = $username;
+        if($email){
+            $model->email = $email;
         }
 
         if ($lockTime !== false) {
