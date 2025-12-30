@@ -11,7 +11,6 @@ use larikmc\auth\Module;
 class AuthController extends Controller
 {
     public $layout = '@larikmc/auth/views/layouts/auth';
-    public $remaining;
 
     /**
      * CAPTCHA action
